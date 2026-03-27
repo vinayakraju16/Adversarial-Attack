@@ -1,0 +1,43 @@
+# Python cache / virtual env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+ENV/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Model and data artifacts
+models/
+results/
+logs/
+
+# Temporary sync archives (created by tar+scp fallback in run_all_remote.ps1)
+repo_sync.tgz
+results_export.tgz
+*.bin
+*.safetensors
+*.pt
+*.ckpt
+*.onnx
+
+# Hugging Face / transformers cache
+.cache/
+cache/
+hf_cache/
+huggingface/
+wandb/
+runs/
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+.vscode/

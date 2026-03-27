@@ -1,0 +1,38 @@
+# =============================================================================
+# experiment.yaml — Edit this file, then run:  python run.py
+# =============================================================================
+
+dataset:
+  name: mdg-nlp/tlink-extr-classification-sentence
+  text_field: text
+  label_field: label
+  split: test
+
+# -----------------------------------------------------------------------------
+# MODELS — list all models to run. The attack runs on each one automatically.
+# To add a model: add a new entry with arch + checkpoint.
+# To skip a model: remove or comment out its entry.
+# -----------------------------------------------------------------------------
+models:
+  - arch: bert
+    checkpoint: models/tlink_bert_final
+  - arch: roberta
+    checkpoint: models/tlink_roberta_final
+
+# -----------------------------------------------------------------------------
+# ATTACK — change name to switch attack. Runs on ALL models above.
+#
+#   textfooler | textbugger | bertattack | bae | pwws | a2t | clare
+#   genetic | faster_genetic | pso | hotflip | deepwordbug | pruthi
+#   morpheus | input_reduction
+#
+#   See ATTACKS.md for details.
+# -----------------------------------------------------------------------------
+attack:
+  name: pwws
+  num_examples: 200
+  seed: 42
+
+model:
+  max_length: 256
+  device: auto                      # auto | cuda | cpu
