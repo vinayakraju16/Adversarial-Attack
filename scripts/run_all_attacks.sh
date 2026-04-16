@@ -2,17 +2,18 @@
 # =============================================================================
 # run_all_attacks.sh
 #
-# Batch runner: iterates over all 12 word-level attacks × 2 model checkpoints.
-# Runs each combination as a separate run_attack.py call so every combination
-# gets its own JSONL + CSV under results/.
+# Batch runner: iterates over all attacks defined in experiment.yaml, running
+# run_encoder.py and run_decoder.py for each attack name in sequence.
+# Edit configs/experiment.yaml to change the attack, then call this script to
+# sweep all attacks in one go by patching the YAML between runs.
 #
 # Usage (on the GPU server, after the repo has been synced):
 #   bash scripts/run_all_attacks.sh
-#   bash scripts/run_all_attacks.sh --num-examples 100   (smaller debug run)
 #
-# Outputs per run:
-#   results/attacks/<run_id>.jsonl
-#   results/summary/<run_id>_summary.csv
+# Outputs per run (inside results/):
+#   results/{dataset}/{attack}/{model}/attacks.jsonl
+#   results/{dataset}/{attack}/{model}/summary.csv
+#   results/{dataset}/{attack}/{model}/stats.json
 # Combined report (after all runs):
 #   results/combined_summary.csv
 # =============================================================================
@@ -21,13 +22,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-
-# ─── SETTINGS ────────────────────────────────────────────────────────────────
-NUM_EXAMPLES="${1:-200}"   # override via first positional arg or env var
-SEED=42
 CONFIG="${REPO_ROOT}/configs/experiment.yaml"
 
-# 12 core word-level attacks (all in TextAttack)
+# 15 supported attacks (must match ATTACK_REGISTRY in run_encoder.py / run_decoder.py)
 ATTACKS=(
   "textfooler"
   "textbugger"
@@ -41,14 +38,10 @@ ATTACKS=(
   "pso"
   "hotflip"
   "deepwordbug"
+  "pruthi"
+  "morpheus"
+  "input_reduction"
 )
-
-# Models: arch_key -> checkpoint_dir (relative to repo root)
-declare -A CHECKPOINTS
-CHECKPOINTS["bert"]="models/tlink_bert_final"
-CHECKPOINTS["roberta"]="models/tlink_roberta_final"
-# To add another model, add one line here and it will be included automatically:
-# CHECKPOINTS["distilbert"]="models/tlink_distilbert_final"
 
 # ─── ACTIVATE VENV ───────────────────────────────────────────────────────────
 VENV_PATH="${HOME}/.venvs/advnlp/bin/activate"
@@ -60,41 +53,28 @@ source "${VENV_PATH}"
 cd "${REPO_ROOT}"
 
 # ─── BATCH LOOP ──────────────────────────────────────────────────────────────
-TOTAL=$(( ${#ATTACKS[@]} * ${#CHECKPOINTS[@]} ))
+TOTAL=${#ATTACKS[@]}
 DONE=0
 FAILED=()
 
-for arch in "${!CHECKPOINTS[@]}"; do
-  checkpoint="${CHECKPOINTS[$arch]}"
+for attack in "${ATTACKS[@]}"; do
+  DONE=$(( DONE + 1 ))
+  echo ""
+  echo "========================================================="
+  echo " [${DONE}/${TOTAL}]  attack=${attack}"
+  echo "========================================================="
 
-  if [[ ! -d "${REPO_ROOT}/${checkpoint}" ]]; then
-    echo "[WARN] Checkpoint not found for ${arch}: ${checkpoint} — skipping model."
-    continue
-  fi
+  # Patch the attack name in experiment.yaml in-place
+  sed -i "s/^  name: .*/  name: ${attack}/" "${CONFIG}"
 
-  for attack in "${ATTACKS[@]}"; do
-    DONE=$(( DONE + 1 ))
-    echo ""
-    echo "========================================================="
-    echo " [${DONE}/${TOTAL}]  arch=${arch}  attack=${attack}"
-    echo "========================================================="
+  python run_encoder.py --skip-training \
+    && echo "[OK] encoder / ${attack}" \
+    || { echo "[WARN] encoder / ${attack} failed — continuing."; FAILED+=("encoder/${attack}"); }
 
-    python run.py \
-      --config "${CONFIG}" \
-      --arch "${arch}" \
-      --attack "${attack}" \
-      --checkpoint "${checkpoint}" \
-      --num-examples "${NUM_EXAMPLES}" \
-      --seed "${SEED}" \
-      && {
-        echo "[OK] ${arch} / ${attack}"
-        python codes/06_results_analysis.py
-      } \
-      || {
-        echo "[WARN] ${arch} / ${attack} failed — logged and continuing."
-        FAILED+=("${arch}/${attack}")
-      }
-  done
+  python run_decoder.py --skip-training \
+    && echo "[OK] decoder / ${attack}" \
+    || { echo "[WARN] decoder / ${attack} failed — continuing."; FAILED+=("decoder/${attack}"); }
+
 done
 
 # ─── COMBINED REPORT ─────────────────────────────────────────────────────────

@@ -1,7 +1,13 @@
 # =============================================================================
-# run.py — Edit configs/experiment.yaml, then:  python run.py
+# run_encoder.py — Full pipeline for encoder models (BERT, RoBERTa, etc.)
+# Usage:
+#   python run_encoder.py                  # train + attack
+#   python run_encoder.py --skip-training  # attack only (models already trained)
+#
+# Edit configs/experiment.yaml to change dataset, models, or attack.
 # =============================================================================
 
+import argparse
 import csv
 import importlib
 import json
@@ -11,13 +17,19 @@ import sys
 from difflib import SequenceMatcher
 from pathlib import Path
 
+import evaluate
 import numpy as np
 import torch
 import yaml
-from datasets import load_dataset
+from datasets import DatasetDict, load_dataset
 from textattack.attack_results import SkippedAttackResult, SuccessfulAttackResult
 from textattack.models.wrappers import HuggingFaceModelWrapper
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import (
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+    Trainer,
+    TrainingArguments,
+)
 
 ROOT   = Path(__file__).parent
 CONFIG = ROOT / "configs" / "experiment.yaml"
@@ -40,6 +52,12 @@ ATTACK_REGISTRY = {
     "input_reduction": ("textattack.attack_recipes", "InputReductionFeng2018"),
 }
 
+ENCODER_KEEP_COLS = {"input_ids", "attention_mask", "token_type_ids", "labels"}
+
+
+# =============================================================================
+# Shared helpers
+# =============================================================================
 
 def load_config():
     with CONFIG.open() as f:
@@ -54,13 +72,11 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-def patch_textattack():
-    import textattack
-    _orig = textattack.search_methods.GreedyWordSwapWIR.__init__
-    def _patched(self, *a, **kw):
-        kw.pop("truncate_words_to", None)
-        _orig(self, *a, **kw)
-    textattack.search_methods.GreedyWordSwapWIR.__init__ = _patched
+def build_label_mappings(dataset, label_field):
+    labels = sorted(set(str(x) for x in dataset[label_field]))
+    label2id = {l: i for i, l in enumerate(labels)}
+    id2label = {i: l for i, l in enumerate(labels)}
+    return label2id, id2label
 
 
 def get_logger(log_path: Path):
@@ -72,6 +88,15 @@ def get_logger(log_path: Path):
     logger.addHandler(logging.FileHandler(log_path, mode="w", encoding="utf-8"))
     logger.propagate = False
     return logger
+
+
+def patch_textattack():
+    import textattack
+    _orig = textattack.search_methods.GreedyWordSwapWIR.__init__
+    def _patched(self, *a, **kw):
+        kw.pop("truncate_words_to", None)
+        _orig(self, *a, **kw)
+    textattack.search_methods.GreedyWordSwapWIR.__init__ = _patched
 
 
 def predict(model, tokenizer, text, device, max_length):
@@ -120,9 +145,107 @@ def print_summary_box(log, s, f, sk, total, oa, aa, asr, ap, aw, aq):
     log.info(sep)
 
 
-def run_single(arch, ckpt_path, dataset, texts, labels, attack, attack_name,
+# =============================================================================
+# PHASE 1 — Training
+# =============================================================================
+
+def train_one(arch, base_model, checkpoint, cfg):
+    output_dir  = ROOT / checkpoint
+    ckpt_dir    = ROOT / checkpoint.replace("_final", "_checkpoints")
+    dataset_name = cfg["dataset"]["name"]
+    text_field  = cfg["dataset"]["text_field"]
+    label_field = cfg["dataset"]["label_field"]
+    epochs      = cfg["training"]["epochs"]
+    batch_size  = cfg["training"]["batch_size"]
+    max_length  = cfg["training"]["max_length"]
+    seed        = cfg["training"]["seed"]
+    dev_cfg     = cfg["training"]["device"]
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") \
+             if dev_cfg == "auto" else torch.device(dev_cfg)
+
+    print(f"\n[train] {arch} ({base_model})  →  {output_dir}  |  device: {device}")
+    set_seed(seed)
+
+    raw = load_dataset(dataset_name)
+    tokenizer = AutoTokenizer.from_pretrained(base_model)
+    label2id, id2label = build_label_mappings(raw["train"], label_field)
+
+    def tokenize(batch):
+        return tokenizer(batch[text_field], padding="max_length",
+                         truncation=True, max_length=max_length)
+
+    tokenized = raw.map(tokenize, batched=True)
+    tokenized = tokenized.map(lambda ex: {"labels": label2id[str(ex[label_field])]})
+
+    keep = [c for c in tokenized["train"].column_names if c in ENCODER_KEEP_COLS]
+    tokenized = DatasetDict({split: ds.select_columns(keep)
+                             for split, ds in tokenized.items()})
+
+    model = AutoModelForSequenceClassification.from_pretrained(
+        base_model, num_labels=len(label2id), label2id=label2id, id2label=id2label)
+
+    metric = evaluate.load("accuracy")
+
+    def compute_metrics(eval_pred):
+        logits, labels = eval_pred
+        return metric.compute(predictions=logits.argmax(axis=-1), references=labels)
+
+    training_args = TrainingArguments(
+        output_dir=str(ckpt_dir),
+        num_train_epochs=epochs,
+        per_device_train_batch_size=batch_size,
+        per_device_eval_batch_size=batch_size,
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        logging_strategy="steps",
+        logging_steps=50,
+        load_best_model_at_end=True,
+        metric_for_best_model="accuracy",
+        greater_is_better=True,
+        seed=seed,
+        report_to="none",
+    )
+
+    trainer = Trainer(
+        model=model, args=training_args,
+        train_dataset=tokenized["train"],
+        eval_dataset=tokenized["test"],
+        tokenizer=tokenizer,
+        compute_metrics=compute_metrics,
+    )
+
+    train_result = trainer.train()
+    trainer.save_model(str(output_dir))
+    tokenizer.save_pretrained(str(output_dir))
+
+    eval_results = trainer.evaluate()
+    stats = {
+        "model":                 arch,
+        "base_model":            base_model,
+        "dataset":               dataset_name,
+        "seed":                  seed,
+        "epochs":                epochs,
+        "train_samples":         len(tokenized["train"]),
+        "eval_samples":          len(tokenized["test"]),
+        "final_train_loss":      round(train_result.training_loss, 4),
+        "final_eval_accuracy":   round(eval_results.get("eval_accuracy", 0), 4),
+        "final_eval_loss":       round(eval_results.get("eval_loss", 0), 4),
+        "train_runtime_seconds": round(train_result.metrics.get("train_runtime", 0), 1),
+    }
+    with (output_dir / "training_stats.json").open("w") as f:
+        json.dump(stats, f, indent=2)
+
+    print(f"[train] Saved model + stats to {output_dir}")
+    print(f"[train] Final eval accuracy: {stats['final_eval_accuracy']*100:.2f}%")
+
+
+# =============================================================================
+# PHASE 2 — Attack
+# =============================================================================
+
+def attack_one(arch, ckpt_path, texts, labels, attack, attack_name,
                N, seed, max_len, device, dataset_name):
-    """Run the attack for one model and save all results."""
 
     out_dir = ROOT / "results" / dataset_name.split("/")[-1] / attack_name / arch
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -134,8 +257,8 @@ def run_single(arch, ckpt_path, dataset, texts, labels, attack, attack_name,
     log.info(f"{'='*60}")
 
     tokenizer = AutoTokenizer.from_pretrained(ckpt_path)
-    model     = AutoModelForSequenceClassification.from_pretrained(ckpt_path).to(device).eval()
-    label2id  = {str(k): int(v) for k, v in model.config.label2id.items()}
+    model = AutoModelForSequenceClassification.from_pretrained(ckpt_path).to(device).eval()
+    label2id = {str(k): int(v) for k, v in model.config.label2id.items()}
 
     records = []
     for text, label in zip(texts, labels):
@@ -164,12 +287,10 @@ def run_single(arch, ckpt_path, dataset, texts, labels, attack, attack_name,
             "pct_words_changed":   pct_changed(text, pert_text),
         })
 
-    # Save per-example JSONL
     with (out_dir / "attacks.jsonl").open("w", encoding="utf-8") as f:
         for r in records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
-    # Compute metrics
     s    = sum(1 for r in records if r["result_type"] == "successful")
     fail = sum(1 for r in records if r["result_type"] == "failed")
     sk   = sum(1 for r in records if r["result_type"] == "skipped")
@@ -198,20 +319,8 @@ def run_single(arch, ckpt_path, dataset, texts, labels, attack, attack_name,
         w.writerow(summary)
 
     stats = {
-        "dataset":                   dataset_name,
-        "model":                     arch,
-        "attack":                    attack_name,
-        "N":                         tot,
-        "seed":                      seed,
-        "num_success":               s,
-        "num_fail":                  fail,
-        "num_skip":                  sk,
-        "original_accuracy":         round(oa,  4),
-        "accuracy_under_attack":     round(aa,  4),
-        "attack_success_rate":       round(asr, 4),
-        "avg_perturbed_word_pct":    round(ap,  4),
-        "avg_words_per_input":       round(aw,  2),
-        "avg_num_queries":           round(aq,  2),
+        **summary,
+        "avg_words_per_input": round(aw, 2),
         "formatted": {
             "original_accuracy":      f"{oa*100:.1f}%",
             "accuracy_under_attack":  f"{aa*100:.1f}%",
@@ -225,39 +334,64 @@ def run_single(arch, ckpt_path, dataset, texts, labels, attack, attack_name,
         json.dump(stats, f, indent=2)
 
     print_summary_box(log, s, fail, sk, tot, oa, aa, asr, ap, aw, aq)
-    log.info(f"\n[run] Results saved to: {out_dir}")
+    log.info(f"\n[attack] Results saved to: {out_dir}")
 
+
+# =============================================================================
+# Main
+# =============================================================================
 
 def main():
-    cfg         = load_config()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--skip-training", action="store_true",
+                        help="Skip fine-tuning and run attacks on existing checkpoints")
+    args = parser.parse_args()
+
+    cfg          = load_config()
+    models       = cfg.get("encoder_models") or []
     dataset_name = cfg["dataset"]["name"]
     attack_name  = cfg["attack"]["name"]
     N            = cfg["attack"]["num_examples"]
     seed         = cfg["attack"]["seed"]
     max_len      = cfg["model"]["max_length"]
     dev_cfg      = cfg["model"]["device"]
-    models       = cfg["models"]  # list of {arch, checkpoint}
+
+    if not models:
+        print("[run_encoder] No encoder_models defined in experiment.yaml — nothing to do.")
+        return
 
     if attack_name not in ATTACK_REGISTRY:
         raise ValueError(f"Unknown attack '{attack_name}'. Options: {sorted(ATTACK_REGISTRY)}")
 
     set_seed(seed)
-    patch_textattack()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") \
              if dev_cfg == "auto" else torch.device(dev_cfg)
 
-    # Load dataset once — shared across all models
+    print(f"\n[run_encoder] dataset  = {dataset_name}")
+    print(f"[run_encoder] attack   = {attack_name}  |  N = {N}  |  seed = {seed}")
+    print(f"[run_encoder] device   = {device}")
+    print(f"[run_encoder] models   = {[m['arch'] for m in models]}")
+    print(f"[run_encoder] training = {'SKIPPED' if args.skip_training else 'enabled'}\n")
+
+    # ------------------------------------------------------------------
+    # PHASE 1 — Train
+    # ------------------------------------------------------------------
+    if not args.skip_training:
+        print(f"\n{'='*60}\n  PHASE 1 — Training encoder models\n{'='*60}")
+        for m in models:
+            train_one(arch=m["arch"], base_model=m["base_model"],
+                      checkpoint=m["checkpoint"], cfg=cfg)
+
+    # ------------------------------------------------------------------
+    # PHASE 2 — Attack
+    # ------------------------------------------------------------------
+    print(f"\n{'='*60}\n  PHASE 2 — Running {attack_name} attack\n{'='*60}")
+
+    patch_textattack()
     ds     = load_dataset(dataset_name, split=cfg["dataset"]["split"]).select(range(min(N, 999999)))
     texts  = [str(r[cfg["dataset"]["text_field"]])  for r in ds]
     labels = [str(r[cfg["dataset"]["label_field"]]) for r in ds]
-
-    # Build attack once — shared across all models
     mod, cls = ATTACK_REGISTRY[attack_name]
-
-    print(f"\n[run] dataset = {dataset_name}")
-    print(f"[run] attack  = {attack_name}  |  N = {N}  |  seed = {seed}")
-    print(f"[run] device  = {device}")
-    print(f"[run] running on {len(models)} model(s): {[m['arch'] for m in models]}\n")
 
     for m in models:
         arch = m["arch"]
@@ -267,22 +401,17 @@ def main():
             print(f"[WARN] Checkpoint not found for {arch}: {ckpt} — skipping.")
             continue
 
-        # Rebuild attack wrapper per model (each model needs its own wrapper)
-        from transformers import AutoModelForSequenceClassification, AutoTokenizer
         _tokenizer = AutoTokenizer.from_pretrained(ckpt)
         _model     = AutoModelForSequenceClassification.from_pretrained(ckpt).to(device).eval()
         atk = getattr(importlib.import_module(mod), cls).build(
                   HuggingFaceModelWrapper(_model, _tokenizer))
 
-        run_single(
-            arch=arch, ckpt_path=ckpt,
-            dataset=ds, texts=texts, labels=labels,
-            attack=atk, attack_name=attack_name,
-            N=N, seed=seed, max_len=max_len, device=device,
-            dataset_name=dataset_name,
-        )
+        attack_one(arch=arch, ckpt_path=ckpt, texts=texts, labels=labels,
+                   attack=atk, attack_name=attack_name,
+                   N=N, seed=seed, max_len=max_len, device=device,
+                   dataset_name=dataset_name)
 
-    print(f"\n[run] All done. Results in: results/{dataset_name.split('/')[-1]}/{attack_name}/")
+    print(f"\n[run_encoder] All done. Results in: results/{dataset_name.split('/')[-1]}/{attack_name}/")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 # =============================================================================
-# experiment.yaml — Edit this file, then run:  python run.py
+# experiment.yaml — single config for training AND attacks
+# Encoder pipeline (BERT, RoBERTa, ...): python run_encoder.py
+# Decoder pipeline (GPT-2, LLaMA, ...): python run_decoder.py
 # =============================================================================
 
 dataset:
@@ -9,30 +11,56 @@ dataset:
   split: test
 
 # -----------------------------------------------------------------------------
-# MODELS — list all models to run. The attack runs on each one automatically.
-# To add a model: add a new entry with arch + checkpoint.
-# To skip a model: remove or comment out its entry.
+# TRAINING — shared settings used by both finetune scripts
 # -----------------------------------------------------------------------------
-models:
-  - arch: bert
-    checkpoint: models/tlink_bert_final
-  - arch: roberta
-    checkpoint: models/tlink_roberta_final
+training:
+  epochs: 3
+  batch_size: 16
+  max_length: 256
+  seed: 42
+  device: auto                    # auto | cuda | cpu
 
 # -----------------------------------------------------------------------------
-# ATTACK — change name to switch attack. Runs on ALL models above.
+# ENCODER MODELS — BERT, RoBERTa, DistilBERT, ALBERT, ELECTRA
+# Used by: codes/finetune_encoder.py  and  run.py
+# -----------------------------------------------------------------------------
+encoder_models:
+  - arch: bert
+    base_model: bert-base-uncased
+    checkpoint: models/tlink_bert_final
+  - arch: roberta
+    base_model: roberta-base
+    checkpoint: models/tlink_roberta_final
+  # - arch: distilbert
+  #   base_model: distilbert-base-uncased
+  #   checkpoint: models/tlink_distilbert_final
+
+# -----------------------------------------------------------------------------
+# DECODER MODELS — GPT-2, LLaMA, OPT, Mistral
+# Used by: codes/finetune_decoder.py  and  run.py
+# Note: comment out all entries if not using decoder models
+# -----------------------------------------------------------------------------
+decoder_models:
+  - arch: gpt2
+    base_model: gpt2
+    checkpoint: models/tlink_gpt2_final
+  # - arch: llama
+  #   base_model: meta-llama/Llama-2-7b-hf
+  #   checkpoint: models/tlink_llama_final
+
+# -----------------------------------------------------------------------------
+# ATTACK — change name to switch attack. Runs on ALL active models above.
 #
 #   textfooler | textbugger | bertattack | bae | pwws | a2t | clare
 #   genetic | faster_genetic | pso | hotflip | deepwordbug | pruthi
 #   morpheus | input_reduction
-#
-#   See ATTACKS.md for details.
 # -----------------------------------------------------------------------------
 attack:
   name: pwws
   num_examples: 200
   seed: 42
 
+# Shared inference settings
 model:
   max_length: 256
-  device: auto                      # auto | cuda | cpu
+  device: auto

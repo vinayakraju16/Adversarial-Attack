@@ -6,10 +6,7 @@ from datasets import load_dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from config import MODELS_DIR
+MODELS_DIR = ROOT / "models"
 
 # ----------------------------------------------------------------
 # Change MODEL_PATH to switch between bert and roberta

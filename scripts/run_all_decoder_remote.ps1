@@ -12,10 +12,9 @@ $LocalRepoPath    = Split-Path -Parent $PSScriptRoot
 $LocalResultsPath = Join-Path $LocalRepoPath "results"
 
 $RequiredRelativeFiles = @(
-    "run_encoder.py",
     "run_decoder.py",
     "codes/06_results_analysis.py",
-    "scripts/run_pipeline_gpu.sh"
+    "scripts/run_pipeline_decoder_gpu.sh"
 )
 
 $ExcludePatterns = @(
@@ -92,7 +91,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "[INFO] Ensuring remote repo directories exist ..."
-ssh $RemoteHost "mkdir -p '$RemoteRepoPath' '$RemoteRepoPath/results' '$RemoteRepoPath/results/attacks' '$RemoteRepoPath/results/summary'"
+ssh $RemoteHost "mkdir -p '$RemoteRepoPath' '$RemoteRepoPath/results'"
 if ($LASTEXITCODE -ne 0) {
     Fail-Step "Could not create remote directories under $RemoteRepoPath. Check permissions on the GPU server."
 }
@@ -100,7 +99,7 @@ if ($LASTEXITCODE -ne 0) {
 New-Item -ItemType Directory -Force -Path $LocalResultsPath | Out-Null
 
 # ----------------------------------------------------------------------------
-# PHASE 1 - SYNC LOCAL TO GPU (rsync or tar+scp fallback)
+# PHASE 1 - SYNC LOCAL TO GPU
 # ----------------------------------------------------------------------------
 
 $UseRsync = Test-Path $RsyncExe
@@ -121,13 +120,12 @@ if ($UseRsync) {
     Write-Host "[INFO] Phase 1/3: Syncing local repo to GPU with tar and scp ..."
 
     $TarFile = Join-Path $env:TEMP "repo_sync.tgz"
-
     $tarExcludes = $ExcludePatterns | ForEach-Object { "--exclude=./$_" }
     $tarArgs = @("-czf", $TarFile) + $tarExcludes + @("-C", $LocalRepoPath, ".")
 
     Write-Host "[INFO]   Creating archive: $TarFile"
     & tar @tarArgs
-    if ($LASTEXITCODE -ne 0) { Fail-Step "tar archive creation failed. Ensure tar is available (Git Bash or WSL)." }
+    if ($LASTEXITCODE -ne 0) { Fail-Step "tar archive creation failed." }
 
     Write-Host "[INFO]   Uploading archive to GPU ..."
     scp $TarFile "${RemoteHost}:${RemoteRepoPath}/repo_sync.tgz"
@@ -137,17 +135,16 @@ if ($UseRsync) {
     ssh $RemoteHost "tar -xzf '$RemoteRepoPath/repo_sync.tgz' -C '$RemoteRepoPath' && rm '$RemoteRepoPath/repo_sync.tgz'"
     if ($LASTEXITCODE -ne 0) { Fail-Step "Remote tar extraction failed." }
 
-    Write-Host "[INFO]   Removing local archive ..."
     Remove-Item $TarFile -Force
 }
 
 # ----------------------------------------------------------------------------
-# PHASE 2 - RUN REMOTE PIPELINE
+# PHASE 2 - RUN DECODER PIPELINE ON GPU
 # ----------------------------------------------------------------------------
 
-Write-Host "[INFO] Phase 2/3: Running GPU pipeline via SSH ..."
-ssh $RemoteHost "bash '$RemoteRepoPath/scripts/run_pipeline_gpu.sh'"
-if ($LASTEXITCODE -ne 0) { Fail-Step "Remote GPU pipeline failed. Check the SSH output above for the error." }
+Write-Host "[INFO] Phase 2/3: Running decoder pipeline on GPU ..."
+ssh $RemoteHost "bash '$RemoteRepoPath/scripts/run_pipeline_decoder_gpu.sh'"
+if ($LASTEXITCODE -ne 0) { Fail-Step "Decoder GPU pipeline failed. Check the SSH output above for the error." }
 
 # ----------------------------------------------------------------------------
 # PHASE 3 - PULL RESULTS BACK TO LOCAL
@@ -178,5 +175,5 @@ if ($UseRsync) {
 }
 
 Write-Host ""
-Write-Host "[DONE] Remote pipeline finished."
+Write-Host "[DONE] Decoder remote pipeline finished."
 Write-Host "[DONE] Results pulled to: $LocalResultsPath"

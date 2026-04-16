@@ -22,7 +22,6 @@ if [[ ! -f "${VENV_PATH}" ]]; then
 fi
 
 require_file "${REPO_ROOT}/run_encoder.py"
-require_file "${REPO_ROOT}/run_decoder.py"
 require_file "${REPO_ROOT}/codes/06_results_analysis.py"
 require_file "${REPO_ROOT}/configs/experiment.yaml"
 
@@ -30,11 +29,9 @@ source "${VENV_PATH}"
 cd "${REPO_ROOT}"
 
 echo "[INFO] Repo root: ${REPO_ROOT}"
-echo "[INFO] Python: $(command -v python)"
 VENV_PYTHON="${HOME}/.venvs/advnlp/bin/python"
-echo "[INFO] Bootstrapping pip if missing ..."
-"${VENV_PYTHON}" -m ensurepip --upgrade 2>/dev/null || true
 echo "[INFO] Installing/verifying Python dependencies from requirements.txt ..."
+"${VENV_PYTHON}" -m ensurepip --upgrade 2>/dev/null || true
 "${VENV_PYTHON}" -m pip install -r "${REPO_ROOT}/requirements.txt" --quiet
 echo "[INFO] Dependencies OK."
 echo "[INFO] GPU snapshot:"
@@ -53,11 +50,8 @@ PY
 echo "[INFO] Running encoder pipeline (train + attack)"
 python run_encoder.py
 
-echo "[INFO] Running decoder pipeline (train + attack)"
-python run_decoder.py
-
 echo "[INFO] Running results analysis"
 python codes/06_results_analysis.py
 
-echo "[DONE] GPU pipeline completed successfully."
+echo "[DONE] Encoder pipeline completed successfully."
 echo "[DONE] Outputs are written under: ${REPO_ROOT}/results/"

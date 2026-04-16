@@ -262,3 +262,10 @@ python codes/predict.py
 | Attack is very slow | Run on the GPU server, not locally |
 | `CUDA not available` | Set `device: cpu` in the YAML, or run on the GPU server |
 | `scp` fails with spaces in path | Use `subst T: "D:\Thesis work"` first, then scp to `T:\...` |
+
+
+
+
+Openrouter api key 
+
+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
