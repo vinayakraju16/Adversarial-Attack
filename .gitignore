@@ -40,3 +40,18 @@ runs/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Claude / AI tooling
+.claude/
+.cursor/
+.cursorrules
+.windsurfrules
+.mcp.json
+.opencodex.json
+
+# AI-generated docs
+AGENTS.md
+ATTACKS.md
+CLAUDE.md
+GEMINI.md
+PLAN.md
