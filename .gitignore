@@ -17,7 +17,6 @@ dist/
 
 # Model and data artifacts
 models/
-results/
 logs/
 
 # Temporary sync archives (created by tar+scp fallback in run_all_remote.ps1)

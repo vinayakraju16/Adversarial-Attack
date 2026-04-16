@@ -1,0 +1,177 @@
+# =============================================================================
+# causal_eval.yaml — Causal Reasoning Evaluation Pipeline Config
+# Run: python run_causal_eval.py
+# =============================================================================
+
+openrouter:
+  api_key: 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
+  base_url: https://openrouter.ai/api/v1
+  # Models to evaluate — comment/uncomment as needed
+  # NOTE: use :free suffix for free-tier models on OpenRouter
+  models:
+    - id: openai/gpt-4o-mini
+      name: gpt4o-mini
+    - id: google/gemma-3-12b-it:free
+      name: gemma3-12b
+    - id: google/gemma-3-27b-it:free
+      name: gemma3-27b
+    # LLaMA free (may hit capacity — retry later)
+    # - id: meta-llama/llama-3.3-70b-instruct:free
+    #   name: llama3-70b
+    # - id: meta-llama/llama-3.2-3b-instruct:free
+    #   name: llama3-3b
+    # Paid models — require credits
+    # - id: meta-llama/llama-3.1-8b-instruct
+    #   name: llama3-8b
+    # - id: mistralai/mistral-7b-instruct-v0.1
+    #   name: mistral-7b
+    # - id: openai/gpt-4o
+    #   name: gpt4o
+
+# Prompting strategies to evaluate
+strategies:
+  - inductive      # few-shot: show examples, let model induce pattern
+  - deductive      # task description only, no examples
+  - abductive      # chain-of-thought reasoning
+
+# Number of few-shot examples (for inductive strategy)
+few_shot_k: 5
+
+# Per-run sample limit (set to null for full dataset)
+max_examples: 200
+
+# Random seed for reproducibility
+seed: 42
+
+# Results output directory
+results_dir: results/causal_eval
+
+# =============================================================================
+# DATASETS — 11 datasets across Pearl's Ladder of Causation (3 levels)
+# =============================================================================
+
+datasets:
+
+  # ---------------------------------------------------------------------------
+  # LEVEL 1: Associative Causation (Correlation / Pattern Recognition)
+  # ---------------------------------------------------------------------------
+
+  - name: natquest
+    level: 1
+    hf_path: mdg-nlp/natquest-causal
+    # hf_path: kaist-ai/NatQuest   # original source — push to mdg-nlp first
+    text_field: question
+    label_field: answer
+    task_type: binary_classification
+    label_map: {"yes": 1, "no": 0}
+    description: "Determine whether a causal relationship exists between two events."
+    enabled: false   # set true after pushing to HF
+
+  - name: ecare
+    level: 1
+    hf_path: mdg-nlp/ecare-causal
+    # hf_path: Causal-Reasoning/e-CARE   # original
+    text_field: premise
+    hypothesis_field: hypothesis
+    label_field: label
+    task_type: binary_classification
+    label_map: {0: 0, 1: 1}
+    description: "Given a premise, determine if the hypothesis is a valid causal explanation."
+    enabled: false
+
+  - name: fincausal_t1
+    level: 1
+    hf_path: mdg-nlp/fincausal-task1
+    text_field: sentence
+    label_field: has_causal
+    task_type: binary_classification
+    label_map: {0: 0, 1: 1}
+    description: "Determine whether a financial news sentence contains a causal relation."
+    enabled: false
+
+  - name: counterbench
+    level: 1
+    hf_path: mdg-nlp/counterbench
+    text_field: question
+    label_field: label
+    task_type: binary_classification
+    label_map: {"true": 1, "false": 0}
+    description: "Determine if a counterfactual statement is plausible."
+    enabled: false
+
+  # ---------------------------------------------------------------------------
+  # LEVEL 2: Interventional Causation (Do-Calculus / Intervention)
+  # ---------------------------------------------------------------------------
+
+  - name: bigbench_cj
+    level: 2
+    hf_path: lukaemon/bbh
+    hf_subset: causal_judgement
+    text_field: input
+    label_field: target
+    task_type: binary_classification
+    label_map: {"Yes": 1, "No": 0}
+    description: "Judge whether an agent caused an outcome, considering moral and normative factors."
+    enabled: true   # available on HF
+
+  - name: bigbench_cu
+    level: 2
+    hf_path: lukaemon/bbh
+    hf_subset: causal_understanding
+    text_field: input
+    label_field: target
+    task_type: multi_choice
+    description: "Select the correct causal explanation from multiple options."
+    enabled: false   # verify subset name first
+
+  - name: ac_reason
+    level: 2
+    hf_path: mdg-nlp/ac-reason
+    text_field: context
+    label_field: label
+    task_type: binary_classification
+    label_map: {0: 0, 1: 1}
+    description: "Given a context, determine if the described causal mechanism is correct."
+    enabled: false
+
+  - name: corr2cause
+    level: 2
+    hf_path: causalnlp/corr2cause
+    text_field: input
+    label_field: output
+    task_type: multi_choice
+    description: "Given a statistical correlation finding, identify the causal conclusion."
+    enabled: false   # large dataset — start with subset
+
+  # ---------------------------------------------------------------------------
+  # LEVEL 3: Counterfactual Causation (Counterfactual Reasoning)
+  # ---------------------------------------------------------------------------
+
+  - name: cladder
+    level: 3
+    hf_path: causalNLP/cladder
+    hf_split: full_v1.5_default   # custom split name (not test/train/validation)
+    text_field: prompt
+    label_field: label
+    task_type: binary_classification
+    label_map: {"yes": 1, "no": 0}
+    description: "Answer causal and counterfactual questions using Pearl's Ladder of Causation."
+    enabled: true   # available on HF
+
+  - name: causalbench
+    level: 3
+    hf_path: mdg-nlp/causalbench
+    text_field: description
+    label_field: label
+    task_type: multi_choice
+    description: "Identify causal relationships between variables given experimental observations."
+    enabled: false
+
+  - name: fincausal_t2
+    level: 3
+    hf_path: mdg-nlp/fincausal-task2
+    text_field: sentence
+    label_field: cause_effect_span
+    task_type: span_extraction
+    description: "Extract cause and effect spans from financial sentences."
+    enabled: false   # different task type — implement separately

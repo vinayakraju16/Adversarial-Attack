@@ -1,0 +1,24 @@
+{
+  "dataset": "mdg-nlp/tlink-extr-classification-sentence",
+  "model": "gpt2",
+  "attack": "pwws",
+  "N": 200,
+  "seed": 42,
+  "num_success": 121,
+  "num_fail": 27,
+  "num_skip": 52,
+  "original_accuracy": 0.765,
+  "accuracy_under_attack": 0.495,
+  "attack_success_rate": 0.8176,
+  "avg_perturbed_word_pct": 10.8554,
+  "avg_num_queries": 164.81,
+  "avg_words_per_input": 33.33,
+  "formatted": {
+    "original_accuracy": "76.5%",
+    "accuracy_under_attack": "49.5%",
+    "attack_success_rate": "81.76%",
+    "avg_perturbed_word_pct": "10.86%",
+    "avg_words_per_input": "33.33",
+    "avg_num_queries": "164.81"
+  }
+}

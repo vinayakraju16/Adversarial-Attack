@@ -1,0 +1,24 @@
+{
+  "dataset": "mdg-nlp/tlink-extr-classification-sentence",
+  "model": "bert",
+  "attack": "pwws",
+  "N": 200,
+  "seed": 42,
+  "num_success": 148,
+  "num_fail": 24,
+  "num_skip": 28,
+  "original_accuracy": 0.86,
+  "accuracy_under_attack": 0.12,
+  "attack_success_rate": 0.8605,
+  "avg_perturbed_word_pct": 9.9618,
+  "avg_words_per_input": 33.33,
+  "avg_num_queries": 186.69,
+  "formatted": {
+    "original_accuracy": "86.0%",
+    "accuracy_under_attack": "12.0%",
+    "attack_success_rate": "86.05%",
+    "avg_perturbed_word_pct": "9.96%",
+    "avg_words_per_input": "33.33",
+    "avg_num_queries": "186.69"
+  }
+}

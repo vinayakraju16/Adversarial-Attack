@@ -1,0 +1,60 @@
+# =============================================================================
+# api_attack.yaml — Config for attacking OpenRouter API models with TextAttack
+# Usage: python run_api_attack.py
+#
+# This pipeline attacks a cloud LLM (GPT-4o-mini etc.) as a black-box
+# text classifier — no local fine-tuning required.
+#
+# Supported attacks (black-box only — no gradients needed):
+#   textfooler | textbugger | bae | pwws | a2t | clare
+#   genetic | faster_genetic | pso | deepwordbug | pruthi
+#   morpheus | input_reduction
+#
+# NOT supported: hotflip, bertattack  (require gradient / token embeddings)
+# =============================================================================
+
+openrouter:
+  api_key:  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
+  base_url: https://openrouter.ai/api/v1
+
+# -----------------------------------------------------------------------------
+# API MODELS — add / comment out as needed
+# -----------------------------------------------------------------------------
+api_models:
+  - arch:     gpt4o-mini
+    model_id: openai/gpt-4o-mini
+  # - arch:     gemma3-12b
+  #   model_id: google/gemma-3-12b-it:free
+  # - arch:     llama3-70b
+  #   model_id: meta-llama/llama-3.3-70b-instruct:free
+
+# -----------------------------------------------------------------------------
+# ATTACK — same names as experiment.yaml ATTACK_REGISTRY
+# Recommended for API: pwws or deepwordbug (fewest queries → lowest cost)
+# -----------------------------------------------------------------------------
+attack:
+  name:         pwws
+  num_examples: 50    # keep low — each example triggers ~100-500 API calls
+  seed:         42
+
+# -----------------------------------------------------------------------------
+# PROMPT — {text} is replaced with the input sentence
+#           {labels} is replaced with the actual label set from the dataset
+# -----------------------------------------------------------------------------
+prompt_template: |
+  You are a temporal relation classifier.
+  Given a sentence, classify the temporal relation between the events.
+
+  Valid labels: {labels}
+  Respond with ONLY one label from the list above. No explanation, no punctuation.
+
+  Sentence: {text}
+  Label:
+
+# -----------------------------------------------------------------------------
+# RATE LIMITING
+# call_delay : seconds between each API call (1.5 is safe for GPT-4o-mini)
+# max_retries: retries on 429 / 503 with exponential backoff
+# -----------------------------------------------------------------------------
+call_delay:  1.5
+max_retries: 5

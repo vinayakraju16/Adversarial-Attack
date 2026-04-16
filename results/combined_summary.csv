@@ -1,0 +1,4 @@
+dataset,model,attack,N,seed,num_success,num_fail,num_skip,original_accuracy,accuracy_under_attack,attack_success_rate,avg_perturbed_word_pct,avg_num_queries
+mdg-nlp/tlink-extr-classification-sentence,bert,pwws,200,42,148,24,28,0.86,0.12,0.8605,9.9618,186.69
+mdg-nlp/tlink-extr-classification-sentence,gpt2,pwws,200,42,121,27,52,0.765,0.495,0.8176,10.8554,164.81
+mdg-nlp/tlink-extr-classification-sentence,roberta,pwws,200,42,137,25,38,0.81,0.125,0.8457,9.8068,175.79

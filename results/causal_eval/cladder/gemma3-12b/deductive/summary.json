@@ -1,0 +1,18 @@
+{
+  "dataset": "cladder",
+  "level": 3,
+  "model": "gemma3-12b",
+  "model_id": "google/gemma-3-12b-it:free",
+  "strategy": "deductive",
+  "n_total": 200,
+  "n_skipped": 0,
+  "n_evaluated": 200,
+  "timestamp": "2026-04-10T05:08:42.887265",
+  "metrics": {
+    "accuracy": 1.0,
+    "f1_macro": 1.0,
+    "f1_micro": 1.0,
+    "precision_macro": 1.0,
+    "recall_macro": 1.0
+  }
+}

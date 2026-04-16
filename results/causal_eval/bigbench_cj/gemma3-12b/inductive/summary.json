@@ -1,0 +1,18 @@
+{
+  "dataset": "bigbench_cj",
+  "level": 2,
+  "model": "gemma3-12b",
+  "model_id": "google/gemma-3-12b-it:free",
+  "strategy": "inductive",
+  "n_total": 187,
+  "n_skipped": 0,
+  "n_evaluated": 187,
+  "timestamp": "2026-04-09T19:13:09.388946",
+  "metrics": {
+    "accuracy": 0.3583,
+    "f1_macro": 0.3022,
+    "f1_micro": 0.3583,
+    "precision_macro": 0.4298,
+    "recall_macro": 0.2409
+  }
+}

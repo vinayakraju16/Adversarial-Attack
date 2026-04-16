@@ -1,0 +1,23 @@
+
+============================================================
+  Model : roberta  |  Attack : pwws  |  N : 200
+  Output: /home/UNT/scr0179/thesis_work/Adversarial-Attack/results/tlink-extr-classification-sentence/pwws/roberta
+============================================================
+
+[Succeeded / Failed / Skipped / Total] 137 / 25 / 38 / 200
+
++-------------------------------+--------+
+| Attack Results                |        |
++-------------------------------+--------+
+| Number of successful attacks: | 137    |
+| Number of failed attacks:     | 25     |
+| Number of skipped attacks:    | 38     |
+| Original accuracy:            | 81.0%  |
+| Accuracy under attack:        | 12.5%  |
+| Attack success rate:          | 84.57% |
+| Average perturbed word %:     | 9.81%  |
+| Average num. words per input: | 33.33  |
+| Avg num queries:              | 175.79 |
++-------------------------------+--------+
+
+[run] Results saved to: /home/UNT/scr0179/thesis_work/Adversarial-Attack/results/tlink-extr-classification-sentence/pwws/roberta

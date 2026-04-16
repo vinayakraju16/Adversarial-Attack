@@ -1,0 +1,24 @@
+{
+  "dataset": "mdg-nlp/tlink-extr-classification-sentence",
+  "model": "roberta",
+  "attack": "pwws",
+  "N": 200,
+  "seed": 42,
+  "num_success": 137,
+  "num_fail": 25,
+  "num_skip": 38,
+  "original_accuracy": 0.81,
+  "accuracy_under_attack": 0.125,
+  "attack_success_rate": 0.8457,
+  "avg_perturbed_word_pct": 9.8068,
+  "avg_words_per_input": 33.33,
+  "avg_num_queries": 175.79,
+  "formatted": {
+    "original_accuracy": "81.0%",
+    "accuracy_under_attack": "12.5%",
+    "attack_success_rate": "84.57%",
+    "avg_perturbed_word_pct": "9.81%",
+    "avg_words_per_input": "33.33",
+    "avg_num_queries": "175.79"
+  }
+}

@@ -1,0 +1,2 @@
+dataset,model,attack,N,seed,num_success,num_fail,num_skip,original_accuracy,accuracy_under_attack,attack_success_rate,avg_perturbed_word_pct,avg_num_queries
+mdg-nlp/tlink-extr-classification-sentence,roberta,pwws,200,42,137,25,38,0.81,0.125,0.8457,9.8068,175.79

@@ -1,0 +1,18 @@
+{
+  "dataset": "bigbench_cj",
+  "level": 2,
+  "model": "gpt4o-mini",
+  "model_id": "openai/gpt-4o-mini",
+  "strategy": "inductive",
+  "n_total": 187,
+  "n_skipped": 84,
+  "n_evaluated": 103,
+  "timestamp": "2026-04-09T17:52:29.965408",
+  "metrics": {
+    "accuracy": 0.6505,
+    "f1_macro": 0.6489,
+    "f1_micro": 0.6505,
+    "precision_macro": 0.6491,
+    "recall_macro": 0.6506
+  }
+}

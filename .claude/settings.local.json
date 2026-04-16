@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \":*)",
+      "Bash(python update_report.py)",
+      "Bash(python:*)"
+    ]
+  },
+  "spinnerTipsEnabled": true
+}
